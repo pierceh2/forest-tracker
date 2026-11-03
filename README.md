@@ -1,7 +1,7 @@
 # Forest tracker
 
 Hourly GitHub Action that loads the Forest browser extension in a real Chromium (under xvfb),
-logs in, reads today's planting record, and commits two files:
+logs in, reads today's planting record, and commits and pushes two files:
 
 - `forest.json` - what your app reads (today's total, resets each day in `America/Los_Angeles`)
 - `data/history.json` - per-day totals the script has seen
