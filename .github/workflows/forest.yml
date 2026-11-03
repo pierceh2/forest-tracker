@@ -7,7 +7,7 @@ on:
     inputs:
       backfill_days:
         description: 'Also read this many previous days into history (0 = today only)'
-        default: '5'
+        default: '0'
 
 permissions:
   contents: write
