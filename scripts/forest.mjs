@@ -220,8 +220,17 @@ try {
   for (let i = 1; i <= BACKFILL_DAYS; i++) {
     const key = addDays(today, -i);
     const got = await goToDay(page, key);
-    if (got !== key) break;
-    history[key] = summarize(parseSessions(await bodyText(page)));
+    if (got !== key) {
+      note = `No page for ${key}; extension stopped at ${got}`;
+      console.error(note);
+      await saveDebug(page, `backfill-unavailable-${key}`);
+      break;
+    }
+
+    const summary = summarize(parseSessions(await bodyText(page)));
+    history[key] = summary;
+    console.log(`Backfill ${key}: ${summary.minutes} min over ${summary.sessions} sessions`);
+    if (summary.sessions === 0) await saveDebug(page, `backfill-empty-${key}`);
   }
 
   const days = Object.keys(history).sort();
