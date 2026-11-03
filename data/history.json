@@ -15,9 +15,11 @@
     "by_tag": {}
   },
   "2026-11-01": {
-    "minutes": 0,
-    "sessions": 0,
-    "by_tag": {}
+    "minutes": 134,
+    "sessions": 2,
+    "by_tag": {
+      "Study": 134
+    }
   },
   "2026-11-02": {
     "minutes": 0,
@@ -25,8 +27,10 @@
     "by_tag": {}
   },
   "2026-11-03": {
-    "minutes": 0,
-    "sessions": 0,
-    "by_tag": {}
+    "minutes": 61,
+    "sessions": 1,
+    "by_tag": {
+      "Work": 61
+    }
   }
 }
