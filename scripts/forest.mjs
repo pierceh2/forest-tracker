@@ -114,6 +114,14 @@ async function ensureLoggedIn(page) {
   await page.waitForLoadState('networkidle').catch(() => {});
 }
 
+async function syncWithForestApp(page) {
+  const syncButton = page.getByText(/^sync with forest app$/i);
+  await syncButton.first().waitFor({ state: 'visible', timeout: 15000 });
+  await syncButton.first().click();
+  console.log('Clicked "Sync with Forest app"');
+  await page.waitForTimeout(1500);
+}
+
 async function bodyText(page) {
   return page.innerText('body');
 }
@@ -199,8 +207,9 @@ try {
   const id = await getExtensionId(ctx);
   await page.goto(`chrome-extension://${id}/${OPTIONS_PATH}`);
   await ensureLoggedIn(page);
-  await page.getByText('Planting Record').first().click().catch(() => {});
+  await page.getByText('Planting Record').first().click();
   await page.waitForTimeout(1000);
+  await syncWithForestApp(page);
 
   const today = todayKey();
   const history = fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')) : {};
