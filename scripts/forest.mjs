@@ -91,27 +91,206 @@ async function getExtensionId(ctx) {
   }
 }
 
-async function visible(locator) {
-  return locator.first().isVisible().catch(() => false);
+function authSurfaces(page) {
+  return page.context().pages().flatMap((openPage) => [openPage, ...openPage.frames()]);
+}
+
+async function findVisibleAuthLocator(page, factories, preferLast = false) {
+  const surfaces = authSurfaces(page);
+  if (preferLast) surfaces.reverse();
+  for (const surface of surfaces) {
+    for (const factory of factories) {
+      const locator = factory(surface);
+      let count;
+      try {
+        count = await locator.count();
+      } catch {
+        continue;
+      }
+      for (let offset = 0; offset < count; offset++) {
+        const i = preferLast ? count - offset - 1 : offset;
+        const candidate = locator.nth(i);
+        try {
+          if (await candidate.isVisible()) return { surface, locator: candidate };
+        } catch {
+          // A popup or frame may close while authentication is transitioning.
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function waitForAuthLocator(page, factories, description, timeout = 15000, preferLast = false) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const found = await findVisibleAuthLocator(page, factories, preferLast);
+    if (found) return found;
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+function authText(regex) {
+  return [
+    (surface) => surface.getByRole('button', { name: regex }),
+    (surface) => surface.getByText(regex, { exact: true }),
+  ];
+}
+
+function authInput(selector) {
+  return [(surface) => surface.locator(selector)];
 }
 
 async function ensureLoggedIn(page) {
   await page.waitForLoadState('networkidle').catch(() => {});
-  const login = page.getByText(/^log ?in$/i);
-  const logout = page.getByText(/^log ?out$/i);
-  if (!(await visible(login)) && await visible(logout)) return;
+  const emailInput = authInput(
+    'input[type="email"], input[name*="email" i], input[placeholder*="email" i]',
+  );
+  const passwordInput = authInput('input[type="password"]');
+  const loginChoice = authText(/^continue with email$/i);
+  const confirmLogin = authText(/^confirm login$/i);
+  const email = await findVisibleAuthLocator(page, emailInput);
+  const password = await findVisibleAuthLocator(page, passwordInput);
+  const choice = await findVisibleAuthLocator(page, loginChoice);
+  const confirm = await findVisibleAuthLocator(page, confirmLogin);
 
-  const pw = page.locator('input[type=password]');
-  if (!(await visible(pw))) {
-    await login.first().click();
+  if (!email && !password && !choice && !confirm) {
+    const login = await findVisibleAuthLocator(page, authText(/^log ?in$/i));
+    if (!login) return;
+    await login.locator.click();
+    console.log('Opened Forest sign-in');
   }
-  await pw.first().waitFor({ timeout: 15000 });
-  await page.locator('input[type=email], input[name*=mail i], input[type=text]').first().fill(EMAIL);
-  await pw.first().fill(PASSWORD);
-  await pw.first().press('Enter');
-  await logout.first().waitFor({ timeout: 30000 });
-  await login.first().waitFor({ state: 'hidden', timeout: 30000 });
-  await page.waitForLoadState('networkidle').catch(() => {});
+
+  const authStep = [
+    ...loginChoice,
+    ...confirmLogin,
+    ...emailInput,
+    ...passwordInput,
+  ];
+  await waitForAuthLocator(page, authStep, 'an email sign-in option or form');
+
+  let confirmedRememberedAccount = false;
+  let confirmButton = await findVisibleAuthLocator(page, confirmLogin);
+  if (confirmButton) {
+    const visibleText = await confirmButton.surface.locator('body').innerText();
+    if (visibleText.toLowerCase().includes(EMAIL.toLowerCase())) {
+      await confirmButton.locator.click();
+      confirmedRememberedAccount = true;
+      console.log('Confirmed the remembered Forest account');
+    } else {
+      const useAnother = await findVisibleAuthLocator(page, authText(/^use another account$/i));
+      if (!useAnother) {
+        throw new Error('Forest offered a remembered account that does not match FOREST_EMAIL');
+      }
+      await useAnother.locator.click();
+      console.log('Selected another Forest account');
+      await waitForAuthLocator(
+        page,
+        [...loginChoice, ...emailInput, ...passwordInput],
+        'email sign-in after choosing another account',
+      );
+    }
+  }
+
+  if (confirmedRememberedAccount) {
+    await page.waitForTimeout(1000);
+    const emailStillVisible = await findVisibleAuthLocator(page, emailInput);
+    const passwordStillVisible = await findVisibleAuthLocator(page, passwordInput);
+    const choiceStillVisible = await findVisibleAuthLocator(page, loginChoice);
+    const confirmStillVisible = await findVisibleAuthLocator(page, confirmLogin);
+    if (!emailStillVisible && !passwordStillVisible && !choiceStillVisible && !confirmStillVisible) {
+      await page.waitForLoadState('networkidle').catch(() => {});
+      return;
+    }
+  }
+
+  let emailButton = await findVisibleAuthLocator(page, loginChoice);
+  if (emailButton) {
+    await emailButton.locator.click();
+    console.log('Selected email sign-in');
+  }
+
+  let emailField = await findVisibleAuthLocator(page, emailInput);
+  if (!emailField && emailButton) {
+    emailField = await waitForAuthLocator(page, emailInput, 'the Forest email field');
+  }
+  let emailStepSubmitted = false;
+  if (emailField) {
+    await emailField.locator.fill(EMAIL);
+    const passwordNow = await findVisibleAuthLocator(page, passwordInput);
+    if (!passwordNow) {
+      const continueButton = await waitForAuthLocator(
+        page,
+        authText(/^continue$/i),
+        'Continue after entering the Forest email',
+        15000,
+        true,
+      );
+      await continueButton.locator.click();
+      emailStepSubmitted = true;
+      console.log('Submitted Forest email');
+    }
+  }
+
+  let passwordField = await findVisibleAuthLocator(page, passwordInput);
+  if (!passwordField && emailStepSubmitted) {
+    await waitForAuthLocator(
+      page,
+      [...passwordInput, ...confirmLogin],
+      'the password form or remembered-account confirmation',
+    );
+    passwordField = await findVisibleAuthLocator(page, passwordInput);
+  }
+  if (!passwordField) {
+    confirmButton = await findVisibleAuthLocator(page, confirmLogin);
+    if (confirmButton) {
+      const visibleText = await confirmButton.surface.locator('body').innerText();
+      if (!visibleText.toLowerCase().includes(EMAIL.toLowerCase())) {
+        throw new Error('Forest confirmation does not list the configured FOREST_EMAIL');
+      }
+      await confirmButton.locator.click();
+      confirmedRememberedAccount = true;
+      console.log('Confirmed the remembered Forest account');
+    }
+    passwordField = await findVisibleAuthLocator(page, passwordInput);
+    if (!passwordField && confirmedRememberedAccount) {
+      await page.waitForTimeout(1000);
+      const emailStillVisible = await findVisibleAuthLocator(page, emailInput);
+      const choiceStillVisible = await findVisibleAuthLocator(page, loginChoice);
+      const confirmStillVisible = await findVisibleAuthLocator(page, confirmLogin);
+      if (!emailStillVisible && !choiceStillVisible && !confirmStillVisible) {
+        await page.waitForLoadState('networkidle').catch(() => {});
+        return;
+      }
+    }
+    if (!passwordField) {
+      passwordField = await waitForAuthLocator(page, passwordInput, 'the Forest password field');
+    }
+  }
+
+  await passwordField.locator.fill(PASSWORD);
+  const submit = await waitForAuthLocator(
+    page,
+    authText(/^(continue|log ?in|sign ?in)$/i),
+    'the Forest sign-in Continue button',
+    15000,
+    true,
+  );
+  await submit.locator.click();
+  console.log('Submitted Forest password');
+
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const remainingPassword = await findVisibleAuthLocator(page, passwordInput);
+    const remainingEmail = await findVisibleAuthLocator(page, emailInput);
+    if (!remainingPassword && !remainingEmail) {
+      await page.waitForLoadState('networkidle').catch(() => {});
+      return;
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error('Forest sign-in did not complete; the login form is still visible');
 }
 
 async function syncWithForestApp(page) {

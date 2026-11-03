@@ -12,6 +12,8 @@ logs in, reads today's planting record, and commits and pushes two files:
 2. Repo **Settings > Secrets and variables > Actions > New repository secret**, add:
    - `FOREST_EMAIL`
    - `FOREST_PASSWORD`
+   The workflow uses these to sign in by email, confirms a remembered account only when its
+   displayed email matches `FOREST_EMAIL`, and syncs with the Forest app before scraping.
 3. **Settings > Actions > General > Workflow permissions**: set to "Read and write permissions".
 4. **Actions** tab > "Forest tracker" > **Run workflow**. Optionally set `backfill_days` (e.g. 30)
    on the first run to fill in past days.
