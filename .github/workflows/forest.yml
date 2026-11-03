@@ -1,0 +1,60 @@
+name: Forest tracker
+
+on:
+  schedule:
+    - cron: '7 * * * *' # hourly (GitHub may delay scheduled runs by several minutes)
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: 'Also read this many previous days into history (0 = today only)'
+        default: '5'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forest
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install --no-audit --no-fund
+
+      - run: npx playwright install --with-deps chromium
+
+      # Reuse the browser profile so we stay logged in between runs
+      - uses: actions/cache@v4
+        with:
+          path: .work/profile
+          key: forest-profile-${{ github.run_id }}
+          restore-keys: forest-profile-
+
+      - name: Scrape Forest
+        run: xvfb-run -a node scripts/forest.mjs
+        env:
+          FOREST_EMAIL: ${{ secrets.FOREST_EMAIL }}
+          FOREST_PASSWORD: ${{ secrets.FOREST_PASSWORD }}
+          TZ_NAME: America/Los_Angeles
+          BACKFILL_DAYS: ${{ inputs.backfill_days || '0' }}
+
+      - name: Upload debug files on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forest-debug
+          path: debug/
+          if-no-files-found: ignore
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
