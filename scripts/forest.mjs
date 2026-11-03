@@ -97,18 +97,20 @@ async function visible(locator) {
 
 async function ensureLoggedIn(page) {
   await page.waitForLoadState('networkidle').catch(() => {});
-  const logout = page.getByText(/log ?out/i);
-  if (await visible(logout)) return;
+  const login = page.getByText(/^log ?in$/i);
+  const logout = page.getByText(/^log ?out$/i);
+  if (!(await visible(login)) && await visible(logout)) return;
 
   const pw = page.locator('input[type=password]');
   if (!(await visible(pw))) {
-    await page.getByText(/^(log ?in|sign ?in)/i).first().click().catch(() => {});
+    await login.first().click();
   }
   await pw.first().waitFor({ timeout: 15000 });
   await page.locator('input[type=email], input[name*=mail i], input[type=text]').first().fill(EMAIL);
   await pw.first().fill(PASSWORD);
   await pw.first().press('Enter');
   await logout.first().waitFor({ timeout: 30000 });
+  await login.first().waitFor({ state: 'hidden', timeout: 30000 });
   await page.waitForLoadState('networkidle').catch(() => {});
 }
 
