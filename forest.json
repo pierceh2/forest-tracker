@@ -1,14 +1,14 @@
 {
-  "updated_at": "2026-11-04T00:56:38.943Z",
+  "updated_at": "2026-11-04T02:46:37.435Z",
   "timezone": "America/Los_Angeles",
   "date": "2026-11-03",
-  "today_minutes": 61,
-  "today_hours": 1.02,
-  "today_sessions": 1,
+  "today_minutes": 142,
+  "today_hours": 2.37,
+  "today_sessions": 2,
   "today_by_tag": {
-    "Work": 61
+    "Work": 142
   },
-  "tracked_total_minutes": 195,
-  "tracked_total_hours": 3.25,
+  "tracked_total_minutes": 276,
+  "tracked_total_hours": 4.6,
   "tracked_days": 6
 }
