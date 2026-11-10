@@ -72,10 +72,10 @@
     }
   },
   "2026-11-10": {
-    "minutes": 87,
-    "sessions": 1,
+    "minutes": 215,
+    "sessions": 2,
     "by_tag": {
-      "Work": 87
+      "Work": 215
     }
   }
 }
