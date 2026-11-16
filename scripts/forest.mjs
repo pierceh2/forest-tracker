@@ -305,6 +305,43 @@ async function bodyText(page) {
   return page.innerText('body');
 }
 
+async function scrollThroughPage(page) {
+  await page.evaluate(() => {
+    const root = document.scrollingElement;
+    const elements = [...new Set([root, ...document.querySelectorAll('*')])];
+    for (const el of elements) {
+      if (!el) continue;
+      const overflowY = getComputedStyle(el).overflowY;
+      if (el === root || overflowY === 'auto' || overflowY === 'scroll') el.scrollTop = 0;
+    }
+  });
+
+  let idlePasses = 0;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const moved = await page.evaluate(() => {
+      const root = document.scrollingElement;
+      const elements = [...new Set([root, ...document.querySelectorAll('*')])];
+      let moved = false;
+      for (const el of elements) {
+        if (!el || el.clientHeight === 0) continue;
+        const overflowY = getComputedStyle(el).overflowY;
+        if (el !== root && overflowY !== 'auto' && overflowY !== 'scroll') continue;
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        if (maxScroll - el.scrollTop <= 1) continue;
+        const before = el.scrollTop;
+        el.scrollTop = Math.min(before + Math.max(el.clientHeight * 0.8, 100), maxScroll);
+        moved ||= el.scrollTop > before;
+      }
+      return moved;
+    });
+
+    idlePasses = moved ? 0 : idlePasses + 1;
+    if (idlePasses === 2) return;
+    await page.waitForTimeout(250);
+  }
+  throw new Error('Timed out scrolling through the Forest planting record');
+}
+
 async function currentDayKey(page) {
   const text = await bodyText(page);
   const m = text.match(/([A-Z][a-z]+) (\d{1,2})(?:st|nd|rd|th) \(\w{3}\) Forest/);
@@ -398,6 +435,7 @@ try {
   let todaySummary;
   let note;
   if (reached === today) {
+    await scrollThroughPage(page);
     todaySummary = summarize(parseSessions(await bodyText(page)));
     if (todaySummary.sessions === 0) await saveDebug(page, 'today-empty'); // handy for tuning the parser
   } else {
@@ -417,6 +455,7 @@ try {
       break;
     }
 
+    await scrollThroughPage(page);
     const summary = summarize(parseSessions(await bodyText(page)));
     history[key] = summary;
     console.log(`Backfill ${key}: ${summary.minutes} min over ${summary.sessions} sessions`);
