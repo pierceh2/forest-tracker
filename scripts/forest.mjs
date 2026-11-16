@@ -305,6 +305,22 @@ async function bodyText(page) {
   return page.innerText('body');
 }
 
+async function scrollAreas(page) {
+  return page.evaluate(() => {
+    const root = document.scrollingElement;
+    return [...new Set([root, ...document.querySelectorAll('*')])]
+      .filter((el) => el && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + 1)
+      .map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        className: typeof el.className === 'string' ? el.className.slice(0, 120) : '',
+        overflowY: getComputedStyle(el).overflowY,
+        clientHeight: el.clientHeight,
+        scrollHeight: el.scrollHeight,
+        scrollTop: Math.round(el.scrollTop),
+      }));
+  });
+}
+
 async function scrollThroughPage(page) {
   await page.evaluate(() => {
     const root = document.scrollingElement;
@@ -315,6 +331,32 @@ async function scrollThroughPage(page) {
       if (el === root || overflowY === 'auto' || overflowY === 'scroll') el.scrollTop = 0;
     }
   });
+
+  const areasBefore = await scrollAreas(page);
+  const snapshots = [];
+  const observedSessions = new Map();
+  const captureSnapshot = async () => {
+    const text = await bodyText(page);
+    const parsed = parseSessions(text);
+    for (const session of parsed) {
+      observedSessions.set(
+        JSON.stringify([session.start, session.end, session.minutes, session.tag]),
+        session,
+      );
+    }
+    const parsedSessions = parsed.map(({ start, end, minutes }) => ({
+      start,
+      end,
+      minutes,
+    }));
+    const snapshot = {
+      timeRanges: [...text.matchAll(/\b\d{1,2}:\d{2}\s*~\s*\d{1,2}:\d{2}\b/g)]
+        .map(([range]) => range),
+      parsedSessions,
+    };
+    if (JSON.stringify(snapshots.at(-1)) !== JSON.stringify(snapshot)) snapshots.push(snapshot);
+  };
+  await captureSnapshot();
 
   let idlePasses = 0;
   for (let attempt = 0; attempt < 200; attempt++) {
@@ -336,8 +378,14 @@ async function scrollThroughPage(page) {
     });
 
     idlePasses = moved ? 0 : idlePasses + 1;
-    if (idlePasses === 2) return;
     await page.waitForTimeout(250);
+    await captureSnapshot();
+    if (idlePasses === 2) {
+      return {
+        sessions: [...observedSessions.values()],
+        diagnostics: { areasBefore, areasAfter: await scrollAreas(page), snapshots },
+      };
+    }
   }
   throw new Error('Timed out scrolling through the Forest planting record');
 }
@@ -435,8 +483,8 @@ try {
   let todaySummary;
   let note;
   if (reached === today) {
-    await scrollThroughPage(page);
-    todaySummary = summarize(parseSessions(await bodyText(page)));
+    const result = await scrollThroughPage(page);
+    todaySummary = summarize(result.sessions);
     if (todaySummary.sessions === 0) await saveDebug(page, 'today-empty'); // handy for tuning the parser
   } else {
     todaySummary = { minutes: 0, sessions: 0, by_tag: {} };
@@ -455,10 +503,14 @@ try {
       break;
     }
 
-    await scrollThroughPage(page);
-    const summary = summarize(parseSessions(await bodyText(page)));
+    const result = await scrollThroughPage(page);
+    const summary = summarize(result.sessions);
     history[key] = summary;
     console.log(`Backfill ${key}: ${summary.minutes} min over ${summary.sessions} sessions`);
+    fs.writeFileSync(
+      path.join(DEBUG_DIR, `backfill-${key}-diagnostics.json`),
+      JSON.stringify({ date: key, ...result.diagnostics }, null, 2) + '\n',
+    );
     if (summary.sessions === 0) await saveDebug(page, `backfill-empty-${key}`);
   }
 

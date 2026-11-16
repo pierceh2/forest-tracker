@@ -18,7 +18,8 @@ logs in, reads today's planting record, and commits and pushes two files:
 4. **Actions** tab > "Forest tracker" > **Run workflow**. Optionally set `backfill_days` (e.g. 30)
    on the first run to fill in past days.
 5. Check that `forest.json` appears in the repo. If the run fails or reports unexpected zero
-   totals, download the `forest-debug` artifact (screenshot + page text) from the run.
+   totals, download the `forest-debug` artifact (screenshot + page text) from the run. Backfill
+   runs also include per-day scroll/session diagnostics in that artifact.
 
 ## Reading it from your app
 
