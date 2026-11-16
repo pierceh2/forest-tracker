@@ -15,8 +15,8 @@ logs in, reads today's planting record, and commits and pushes two files:
    The workflow uses these to sign in by email, confirms a remembered account only when its
    displayed email matches `FOREST_EMAIL`, and syncs with the Forest app before scraping.
 3. **Settings > Actions > General > Workflow permissions**: set to "Read and write permissions".
-4. **Actions** tab > "Forest tracker" > **Run workflow**. Optionally set `backfill_days` (e.g. 30)
-   on the first run to fill in past days.
+4. **Actions** tab > "Forest tracker" > **Run workflow**. Set `backfill_days` (e.g. 30) to read
+   past days; backfill runs first request a full sync of the extension's server-synced records.
 5. Check that `forest.json` appears in the repo. If the run fails or reports unexpected zero
    totals, download the `forest-debug` artifact (screenshot + page text) from the run. Backfill
    runs also include per-day scroll/session diagnostics in that artifact.
@@ -51,6 +51,9 @@ Check `updated_at` in your app: if it's more than ~2 hours old, the scrape is fa
 
 - `tracked_total_*` only covers days the script has read (today onward, plus any backfill).
   It is not necessarily your all-time Forest total.
+- The extension's planting record is browser history, not a complete mobile-app history. A
+  full sync can retrieve records synced from other browser extensions, but mobile-app-only trees
+  are not listed in the extension's planting record.
 - This was written without access to Forest, so the login form selectors and the planting-record
   parser are best guesses based on a screenshot. Expect to tune `ensureLoggedIn` and
   `parseSessions` in `scripts/forest.mjs` after the first run.
