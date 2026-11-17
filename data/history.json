@@ -119,10 +119,10 @@
     }
   },
   "2026-11-17": {
-    "minutes": 180,
-    "sessions": 1,
+    "minutes": 360,
+    "sessions": 2,
     "by_tag": {
-      "Work": 180
+      "Work": 360
     }
   }
 }
