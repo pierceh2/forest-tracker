@@ -16,7 +16,8 @@ logs in, reads today's planting record, and commits and pushes two files:
    displayed email matches `FOREST_EMAIL`, and syncs with the Forest app before scraping.
 3. **Settings > Actions > General > Workflow permissions**: set to "Read and write permissions".
 4. **Actions** tab > "Forest tracker" > **Run workflow**. Set `backfill_days` (e.g. 30) to read
-   past days; backfill runs first request a full sync of the extension's server-synced records.
+   past days; every scrape requests a full sync of the extension's server-synced records so
+   incremental syncs cannot leave previously recorded sessions out.
 5. Check that `forest.json` appears in the repo. If the run fails or reports unexpected zero
    totals, download the `forest-debug` artifact (screenshot + page text) from the run. Backfill
    runs also include per-day scroll/session diagnostics in that artifact.

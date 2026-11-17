@@ -293,17 +293,15 @@ async function ensureLoggedIn(page) {
   throw new Error('Forest sign-in did not complete; the login form is still visible');
 }
 
-async function syncWithForestApp(page, { fullHistory = false } = {}) {
-  if (fullHistory) {
-    await page.evaluate(() => new Promise((resolve, reject) => {
-      chrome.storage.local.set({ lastSyncedAt: new Date(0).toISOString() }, () => {
-        const error = chrome.runtime.lastError;
-        if (error) reject(new Error(`Could not reset Forest sync cursor: ${error.message}`));
-        else resolve();
-      });
-    }));
-    console.log('Reset Forest sync cursor for a full-history backfill');
-  }
+async function syncWithForestApp(page) {
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    chrome.storage.local.set({ lastSyncedAt: new Date(0).toISOString() }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(`Could not reset Forest sync cursor: ${error.message}`));
+      else resolve();
+    });
+  }));
+  console.log('Reset Forest sync cursor for a full-history sync');
 
   const syncButton = page.getByText(/^sync with forest app$/i);
   await syncButton.first().waitFor({ state: 'visible', timeout: 15000 });
@@ -491,7 +489,7 @@ try {
   await ensureLoggedIn(page);
   await page.getByText('Planting Record').first().click();
   await page.waitForTimeout(1000);
-  await syncWithForestApp(page, { fullHistory: BACKFILL_DAYS > 0 });
+  await syncWithForestApp(page);
 
   const today = todayKey();
   const history = fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')) : {};
